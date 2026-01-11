@@ -17,12 +17,13 @@ jobs:
       contents: read
       pages: write
       id-token: write
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -43,8 +44,8 @@ jobs:
       - name: Build MkDocs site
         run: mkdocs build -f docs/mkdocs.yml --site-dir site
 
-      - name: Upload pages artifact
-        uses: actions/upload-pages-artifact@v1
+      - name: Upload site to GitHub Pages artifact storage
+        uses: actions/upload-pages-artifact@v2
         with:
           path: 'site'
 
@@ -54,6 +55,7 @@ jobs:
     permissions:
       pages: write
       id-token: write
+
     steps:
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v2
