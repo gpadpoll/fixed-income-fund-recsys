@@ -47,7 +47,7 @@ jobs:
       - name: Upload site to GitHub Pages artifact storage
         uses: actions/upload-pages-artifact@v4
         with:
-          path: 'site'
+          path: 'docs/site'
 
   deploy:
     runs-on: ubuntu-latest
