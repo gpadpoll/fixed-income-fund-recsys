@@ -144,3 +144,5 @@ dmypy.json
 
 # temp files
 etc/
+*.DS_Store
+docs/notebooks/tmp/*
