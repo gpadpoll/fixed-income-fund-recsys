@@ -1,13 +1,91 @@
-# Fixed Income Funds Recommendation System
+# E2E Example
 
 This notebook demonstrates the data ingestion, feature engineering, and scoring pipeline for a fixed-income fund recommendation system.
 
-What you'll see here:
+This illustrates the steps in our pipeline and explains the recommendation method.
 
-- Define data sources and feature/score configuration using a YAML manifest.
-- Fetch and prepare datasets (partitioned by period).
-- Compute fund-month features and derive scores using configurable YAML registries.
-- Produce ranked fund profiles based on profile weights.
+
+**Highlights:**
+
+- Interpretable and flexible knowledge-based recommendation system.
+- Config-driven pipeline from YAML
+
+
+## Method
+
+Our proposed recommendation system method is quite simple, it is a knowledge-based recommendation system that relies on CVM data to recommend fixed income funds on a periodic basis. It is designed to run in batch in a monthly basis but also allow exploration and backfill.
+
+The high-level recommendation method is as follows:
+
+1. **Fetches recent data from CVM**. It currently support CDA, but can easily expanded to other data sources, such as AMBIMA, and other CVM data, like daily information about quote values.
+
+2. **Feature Engineering**: It has a built-in feature engine (quite cool by the way), which allow us to compute flexible feature definitions on parametrized entities and time columns. So, basically, we are currently applying the feature definitions on `(CNPJ_FUNDO_CLASSE, DENOM_SOCIAL)` as entity but we can replace it by any other entity we like.
+
+The feature definitions are config-driven and are not tied to any specific backend. For example, we are currently using pandas to perform the transformations, but we could easily switch to pyspark, SQL or any other backend we like.
+
+3. **Compute Scores**: On top of our features, we compute scores. Each score represent a criteria of interest, for example risk, diversification, etc. Right now, we are using single feature models based on z-score, but we could have more interesting heuristic logics or even ML models at this step. Something that I would like to test but I didn't have the time, is creating a estimated sharpe score, so take the quotas information, train an xgboost to predict the sharpe ration of a fund in the future.
+
+4. **Ranking based on Customer Profile Weighting over the Scores**: This is the hearth of our recommendation system. Basically, I perform a weighted sum on top of the scores to compute a final score, which I use to rank the funds. In a sense, it is like a utility function that combines all criteria of interests, aka the scores, into a utility score that best suits a customer profile.
+
+In a sense, we apply a **weighted sum** over all criteria, where each weight reflects the customer’s profile as the formula below:
+
+```math
+U_i = \sum_{k=1}^{K} w_k \, s_{i,k}
+```
+
+Where:
+
+- **\(U_i\)** — final utility score for fund *i*  
+- **\(s_{i,k}\)** — score *k* for fund *i*  
+- **\(w_k\)** — weight of score *k* derived from customer profile  
+- **\(K\)** — number of criteria  
+
+---
+
+```math
+U_i =
+\begin{bmatrix}
+w_1 & w_2 & \cdots & w_K
+\end{bmatrix}
+\begin{bmatrix}
+s_{i,1} \\
+s_{i,2} \\
+\vdots \\
+s_{i,K}
+\end{bmatrix}
+```
+
+---
+
+And, we apply normalization:
+
+```math
+U_i = \sum_{k=1}^{K} 
+\left( \frac{w_k}{\sum_{j=1}^{K} w_j} \right) s_{i,k}
+```
+
+```math
+\text{RankedFunds} = \operatorname{argsort}\left( -U_i \right)
+```
+
+Where:
+
+- \(U_i\) is the final utility score for fund *i*
+- `argsort` returns the indices of funds sorted by the given value
+- The negative sign ensures **descending order** (highest score first)
+
+---
+
+### Customer Profiles
+
+The customer profiles weights, as it is, are hardcoded values. But we propose different ways to define these weights.
+
+To address cold-start, we could have a questionnaire with Likert-scale questions, 1 to 5, to understand how important each criteria is to the customer, or even having a fuzzy logic heuristic to combine the questionnaire answers into the weights for each score.
+
+After we have customer feedback on the recommendations, we could introduce this feedback into a re-ranker approach, where we adjust the rankings based on previous choices of our customer portfolio.
+
+## Troubleshooting
+
 
 **Prerequisites:** Python packages: `pandas`, `requests`, `pyyaml`. Optional: `pyarrow` or `fastparquet` for Parquet I/O.
 
@@ -1503,7 +1581,7 @@ from fif_recsys.commands.model import compute_scores_from_yaml
 
 score_df = compute_scores_from_yaml(feature_df, config_d)
 
-score_df.head()
+score_df[['CNPJ_FUNDO_CLASSE', 'DENOM_SOCIAL', *[c for c in score_df.columns if 'score' in c]]].head()
 
 ```
 
@@ -1530,15 +1608,6 @@ score_df.head()
       <th></th>
       <th>CNPJ_FUNDO_CLASSE</th>
       <th>DENOM_SOCIAL</th>
-      <th>reference_date</th>
-      <th>patrimonio_liq</th>
-      <th>log_aum</th>
-      <th>total_posicao</th>
-      <th>n_ativos</th>
-      <th>n_emissores</th>
-      <th>credito_share</th>
-      <th>related_party_share</th>
-      <th>issuer_hhi</th>
       <th>size_score</th>
       <th>diversification_score</th>
       <th>issuer_diversification_score</th>
@@ -1551,16 +1620,7 @@ score_df.head()
     <tr>
       <th>0</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
-      <td>2026-01-14</td>
-      <td>9.863479e+08</td>
-      <td>20.709520</td>
-      <td>5.825532e+09</td>
-      <td>55</td>
-      <td>1</td>
-      <td>0.0</td>
-      <td>0.125814</td>
-      <td>1.000000</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>1.270380</td>
       <td>2.366598</td>
       <td>-0.537225</td>
@@ -1571,16 +1631,7 @@ score_df.head()
     <tr>
       <th>1</th>
       <td>09.260.031/0001-56</td>
-      <td>FUNDO DE INVESTIMENTO EM QUOTAS DE FUNDO DE IN...</td>
-      <td>2026-01-14</td>
-      <td>8.236450e+07</td>
-      <td>18.226665</td>
-      <td>5.039806e+08</td>
-      <td>0</td>
-      <td>8</td>
-      <td>0.0</td>
-      <td>0.479135</td>
-      <td>0.298536</td>
+      <td>FUNDO DE INVESTIMENTO EM QUOTAS DE FUNDO DE INVESTIMENTO EM DIREITOS CREDITÓRIOS NÃO PADRONIZADO SRM</td>
       <td>0.205049</td>
       <td>-0.227050</td>
       <td>-0.023439</td>
@@ -1591,16 +1642,7 @@ score_df.head()
     <tr>
       <th>2</th>
       <td>10.292.322/0001-05</td>
-      <td>KONDOR KOBOLD FUNDO DE INVESTIMENTO EM COTAS D...</td>
-      <td>2026-01-14</td>
-      <td>5.282581e+08</td>
-      <td>20.085096</td>
-      <td>4.007817e+09</td>
-      <td>0</td>
-      <td>4</td>
-      <td>0.0</td>
-      <td>0.999686</td>
-      <td>0.612586</td>
+      <td>KONDOR KOBOLD FUNDO DE INVESTIMENTO EM COTAS DE FIDC - RESP LIMITADA</td>
       <td>1.002455</td>
       <td>-0.227050</td>
       <td>-0.317031</td>
@@ -1611,16 +1653,7 @@ score_df.head()
     <tr>
       <th>3</th>
       <td>10.406.511/0001-61</td>
-      <td>ISHARES IBOVESPA CLASSE DE ÍNDICE - RESPONSABI...</td>
-      <td>2026-01-14</td>
-      <td>1.499092e+10</td>
-      <td>23.430710</td>
-      <td>1.028544e+11</td>
-      <td>103</td>
-      <td>9</td>
-      <td>0.0</td>
-      <td>0.013466</td>
-      <td>0.364377</td>
+      <td>ISHARES IBOVESPA CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA</td>
       <td>2.437974</td>
       <td>4.630145</td>
       <td>0.049959</td>
@@ -1631,16 +1664,7 @@ score_df.head()
     <tr>
       <th>4</th>
       <td>10.406.600/0001-08</td>
-      <td>ISHARES BM&amp;FBOVESPA SMALL CAP CLASSE DE  ÍNDIC...</td>
-      <td>2026-01-14</td>
-      <td>2.112755e+09</td>
-      <td>21.471258</td>
-      <td>1.813606e+10</td>
-      <td>131</td>
-      <td>11</td>
-      <td>0.0</td>
-      <td>0.035685</td>
-      <td>0.856891</td>
+      <td>ISHARES BM&amp;FBOVESPA SMALL CAP CLASSE DE  ÍNDICE - RESPONSABILIDADE LIMITADA</td>
       <td>1.597222</td>
       <td>5.950548</td>
       <td>0.196754</td>
@@ -1660,11 +1684,15 @@ Use `compute_profile_scores_from_yaml` (from `fif_recsys.commands.policy`) to ag
 
 
 ```python
+import pandas as pd
+pd.set_option('display.max_colwidth', None) # or set to a large integer value (e.g., 500)
+
+
 from fif_recsys.commands.policy import compute_profile_scores_from_yaml
 
 ranking_df = compute_profile_scores_from_yaml(score_df.fillna(0), config_d)
 
-ranking_df.head()
+ranking_df[['CNPJ_FUNDO_CLASSE', 'DENOM_SOCIAL', 'reference_date', *[c for c in ranking_df.columns if 'rank' in c]]].head()
 ```
 
 
@@ -1691,23 +1719,8 @@ ranking_df.head()
       <th>CNPJ_FUNDO_CLASSE</th>
       <th>DENOM_SOCIAL</th>
       <th>reference_date</th>
-      <th>patrimonio_liq</th>
-      <th>log_aum</th>
-      <th>total_posicao</th>
-      <th>n_ativos</th>
-      <th>n_emissores</th>
-      <th>credito_share</th>
-      <th>related_party_share</th>
-      <th>...</th>
-      <th>issuer_diversification_score</th>
-      <th>credit_risk_score</th>
-      <th>governance_risk_score</th>
-      <th>concentration_risk_score</th>
-      <th>score_conservative</th>
       <th>rank_conservative</th>
-      <th>score_balanced</th>
       <th>rank_balanced</th>
-      <th>score_institutional</th>
       <th>rank_institutional</th>
     </tr>
   </thead>
@@ -1715,126 +1728,50 @@ ranking_df.head()
     <tr>
       <th>0</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>9.863479e+08</td>
-      <td>20.709520</td>
-      <td>5.825532e+09</td>
-      <td>55</td>
-      <td>1</td>
-      <td>0.0</td>
-      <td>0.125814</td>
-      <td>...</td>
-      <td>-0.537225</td>
-      <td>0.064385</td>
-      <td>0.500056</td>
-      <td>-1.078161</td>
-      <td>0.635317</td>
       <td>84</td>
-      <td>0.454643</td>
       <td>125</td>
-      <td>0.695616</td>
       <td>74</td>
     </tr>
     <tr>
       <th>1</th>
       <td>09.260.031/0001-56</td>
-      <td>FUNDO DE INVESTIMENTO EM QUOTAS DE FUNDO DE IN...</td>
+      <td>FUNDO DE INVESTIMENTO EM QUOTAS DE FUNDO DE INVESTIMENTO EM DIREITOS CREDITÓRIOS NÃO PADRONIZADO SRM</td>
       <td>2026-01-14</td>
-      <td>8.236450e+07</td>
-      <td>18.226665</td>
-      <td>5.039806e+08</td>
-      <td>0</td>
-      <td>8</td>
-      <td>0.0</td>
-      <td>0.479135</td>
-      <td>...</td>
-      <td>-0.023439</td>
-      <td>0.064385</td>
-      <td>-0.376790</td>
-      <td>0.839722</td>
-      <td>0.057116</td>
       <td>363</td>
-      <td>0.085753</td>
       <td>367</td>
-      <td>0.064149</td>
       <td>367</td>
     </tr>
     <tr>
       <th>2</th>
       <td>10.292.322/0001-05</td>
-      <td>KONDOR KOBOLD FUNDO DE INVESTIMENTO EM COTAS D...</td>
+      <td>KONDOR KOBOLD FUNDO DE INVESTIMENTO EM COTAS DE FIDC - RESP LIMITADA</td>
       <td>2026-01-14</td>
-      <td>5.282581e+08</td>
-      <td>20.085096</td>
-      <td>4.007817e+09</td>
-      <td>0</td>
-      <td>4</td>
-      <td>0.0</td>
-      <td>0.999686</td>
-      <td>...</td>
-      <td>-0.317031</td>
-      <td>0.064385</td>
-      <td>-1.668657</td>
-      <td>-0.018927</td>
-      <td>-0.017303</td>
       <td>442</td>
-      <td>-0.121382</td>
       <td>598</td>
-      <td>0.029600</td>
       <td>408</td>
     </tr>
     <tr>
       <th>3</th>
       <td>10.406.511/0001-61</td>
-      <td>ISHARES IBOVESPA CLASSE DE ÍNDICE - RESPONSABI...</td>
+      <td>ISHARES IBOVESPA CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>1.499092e+10</td>
-      <td>23.430710</td>
-      <td>1.028544e+11</td>
-      <td>103</td>
-      <td>9</td>
-      <td>0.0</td>
-      <td>0.013466</td>
-      <td>...</td>
-      <td>0.049959</td>
-      <td>0.064385</td>
-      <td>0.778873</td>
-      <td>0.659707</td>
-      <td>1.699030</td>
       <td>7</td>
-      <td>1.418274</td>
       <td>7</td>
-      <td>1.817709</td>
       <td>6</td>
     </tr>
     <tr>
       <th>4</th>
       <td>10.406.600/0001-08</td>
-      <td>ISHARES BM&amp;FBOVESPA SMALL CAP CLASSE DE  ÍNDIC...</td>
+      <td>ISHARES BM&amp;FBOVESPA SMALL CAP CLASSE DE  ÍNDICE - RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>2.112755e+09</td>
-      <td>21.471258</td>
-      <td>1.813606e+10</td>
-      <td>131</td>
-      <td>11</td>
-      <td>0.0</td>
-      <td>0.035685</td>
-      <td>...</td>
-      <td>0.196754</td>
-      <td>0.064385</td>
-      <td>0.723733</td>
-      <td>-0.686886</td>
-      <td>1.642109</td>
       <td>8</td>
-      <td>1.259944</td>
       <td>9</td>
-      <td>1.718750</td>
       <td>8</td>
     </tr>
   </tbody>
 </table>
-<p>5 rows × 23 columns</p>
 </div>
 
 
@@ -1858,7 +1795,7 @@ If you ran the Docker pipeline and mounted an output directory (e.g., `/tmp/fif_
 
 
 ```python
-ranking_df.sort_values(by='rank_conservative', ascending=True)[:5]
+ranking_df[['CNPJ_FUNDO_CLASSE', 'DENOM_SOCIAL', 'reference_date', *[c for c in ranking_df.columns if 'rank' in c]]].sort_values(by='rank_conservative', ascending=True)[:5]
 ```
 
 
@@ -1885,23 +1822,8 @@ ranking_df.sort_values(by='rank_conservative', ascending=True)[:5]
       <th>CNPJ_FUNDO_CLASSE</th>
       <th>DENOM_SOCIAL</th>
       <th>reference_date</th>
-      <th>patrimonio_liq</th>
-      <th>log_aum</th>
-      <th>total_posicao</th>
-      <th>n_ativos</th>
-      <th>n_emissores</th>
-      <th>credito_share</th>
-      <th>related_party_share</th>
-      <th>...</th>
-      <th>issuer_diversification_score</th>
-      <th>credit_risk_score</th>
-      <th>governance_risk_score</th>
-      <th>concentration_risk_score</th>
-      <th>score_conservative</th>
       <th>rank_conservative</th>
-      <th>score_balanced</th>
       <th>rank_balanced</th>
-      <th>score_institutional</th>
       <th>rank_institutional</th>
     </tr>
   </thead>
@@ -1909,126 +1831,50 @@ ranking_df.sort_values(by='rank_conservative', ascending=True)[:5]
     <tr>
       <th>219</th>
       <td>40.155.573/0001-09</td>
-      <td>TREND ETF IBOVESPA CLASSE DE ÍNDICE -  RESPONS...</td>
+      <td>TREND ETF IBOVESPA CLASSE DE ÍNDICE -  RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>1.001094e+09</td>
-      <td>20.724359</td>
-      <td>9.626491e+09</td>
-      <td>130</td>
-      <td>130</td>
-      <td>0.0</td>
-      <td>0.001832</td>
-      <td>...</td>
-      <td>8.931106</td>
-      <td>0.064385</td>
-      <td>0.807746</td>
-      <td>1.533615</td>
-      <td>3.529880</td>
       <td>1</td>
-      <td>2.844605</td>
       <td>1</td>
-      <td>3.590498</td>
       <td>1</td>
     </tr>
     <tr>
       <th>133</th>
       <td>32.203.211/0001-18</td>
-      <td>FUNDO DE INVESTIMENTO DE ÍNDICE - CLASSE DE IN...</td>
+      <td>FUNDO DE INVESTIMENTO DE ÍNDICE - CLASSE DE INVESTIMENTO ETF BRADESCO IBOVESPA - RESP LIMITADA</td>
       <td>2026-01-14</td>
-      <td>1.910818e+09</td>
-      <td>21.370797</td>
-      <td>1.100393e+10</td>
-      <td>93</td>
-      <td>79</td>
-      <td>0.0</td>
-      <td>0.059015</td>
-      <td>...</td>
-      <td>5.187812</td>
-      <td>0.064385</td>
-      <td>0.665834</td>
-      <td>1.495788</td>
-      <td>2.483626</td>
       <td>2</td>
-      <td>2.049902</td>
       <td>2</td>
-      <td>2.558113</td>
       <td>2</td>
     </tr>
     <tr>
       <th>419</th>
       <td>48.643.130/0001-79</td>
-      <td>FUNDO DE INVESTIMENTO DE ÍNDICE - CI B-INDEX M...</td>
+      <td>FUNDO DE INVESTIMENTO DE ÍNDICE - CI B-INDEX MORNINGSTAR BRASIL PESOS IGUAIS - RESP LIMITADA</td>
       <td>2026-01-14</td>
-      <td>7.718110e+07</td>
-      <td>18.161665</td>
-      <td>2.279355e+08</td>
-      <td>97</td>
-      <td>70</td>
-      <td>0.0</td>
-      <td>0.061258</td>
-      <td>...</td>
-      <td>4.527231</td>
-      <td>0.064385</td>
-      <td>0.660266</td>
-      <td>1.587268</td>
-      <td>2.053588</td>
       <td>3</td>
-      <td>1.716604</td>
       <td>3</td>
-      <td>2.059226</td>
       <td>3</td>
     </tr>
     <tr>
       <th>143</th>
       <td>34.606.480/0001-50</td>
-      <td>BB ETF IBOVESPA FUNDO DE ÍNDICE RESPONSABILIDA...</td>
+      <td>BB ETF IBOVESPA FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>2.199202e+09</td>
-      <td>21.511360</td>
-      <td>1.252859e+10</td>
-      <td>95</td>
-      <td>45</td>
-      <td>0.0</td>
-      <td>0.036515</td>
-      <td>...</td>
-      <td>2.692283</td>
-      <td>0.064385</td>
-      <td>0.721672</td>
-      <td>0.820588</td>
-      <td>1.956525</td>
       <td>4</td>
-      <td>1.608878</td>
       <td>5</td>
-      <td>2.034027</td>
       <td>4</td>
     </tr>
     <tr>
       <th>725</th>
       <td>57.848.980/0001-02</td>
-      <td>BB ETF ÍNDICE BOVESPA B3 BR+ FUNDO DE ÍNDICE R...</td>
+      <td>BB ETF ÍNDICE BOVESPA B3 BR+ FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>2026-01-14</td>
-      <td>2.608017e+07</td>
-      <td>17.076686</td>
-      <td>2.580044e+08</td>
-      <td>106</td>
-      <td>67</td>
-      <td>0.0</td>
-      <td>0.033134</td>
-      <td>...</td>
-      <td>4.307037</td>
-      <td>0.064385</td>
-      <td>0.730064</td>
-      <td>1.245778</td>
-      <td>1.950878</td>
       <td>5</td>
-      <td>1.613376</td>
       <td>4</td>
-      <td>1.933240</td>
       <td>5</td>
     </tr>
   </tbody>
 </table>
-<p>5 rows × 23 columns</p>
 </div>
 
 
@@ -2038,6 +1884,9 @@ ranking_df.sort_values(by='rank_conservative', ascending=True)[:5]
 # Load and preview the profile-scored table
 from pathlib import Path
 import pandas as pd
+
+pd.set_option('display.max_colwidth', None) # or set to a large integer value (e.g., 500)
+
 
 # Update this path to the directory you mounted into the container (host path: /tmp/fif_data)
 output_dir = Path("/tmp/fif_data")
@@ -2056,7 +1905,7 @@ else:
 print("Path:", pj if pj.exists() else pcsv)
 print("Rows:", len(df))
 print("Columns:", list(df.columns))
-df.head()
+df
 
 ```
 
@@ -2113,7 +1962,7 @@ df.head()
     <tr>
       <th>0</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>202506</td>
       <td>9.630971e+08</td>
       <td>20.685665</td>
@@ -2137,7 +1986,7 @@ df.head()
     <tr>
       <th>1</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>202507</td>
       <td>9.206483e+08</td>
       <td>20.640589</td>
@@ -2150,18 +1999,18 @@ df.head()
       <td>-0.538943</td>
       <td>0.066368</td>
       <td>0.469103</td>
-      <td>-0.97675</td>
+      <td>-0.976750</td>
       <td>0.547754</td>
       <td>533</td>
       <td>0.394923</td>
       <td>765</td>
-      <td>0.60993</td>
+      <td>0.609930</td>
       <td>485</td>
     </tr>
     <tr>
       <th>2</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>202508</td>
       <td>9.333802e+08</td>
       <td>20.654323</td>
@@ -2185,7 +2034,7 @@ df.head()
     <tr>
       <th>3</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>202509</td>
       <td>9.502398e+08</td>
       <td>20.672225</td>
@@ -2209,7 +2058,7 @@ df.head()
     <tr>
       <th>4</th>
       <td>06.323.688/0001-27</td>
-      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABI...</td>
+      <td>IT NOW PIBB IBRX-50 FUNDO DE ÍNDICE RESPONSABILIDADE LIMITADA</td>
       <td>202510</td>
       <td>9.650222e+08</td>
       <td>20.687662</td>
@@ -2230,9 +2079,153 @@ df.head()
       <td>NaN</td>
       <td>0</td>
     </tr>
+    <tr>
+      <th>...</th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+    </tr>
+    <tr>
+      <th>5471</th>
+      <td>63.698.764/0001-12</td>
+      <td>TREND ETF IDEX B50 CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA</td>
+      <td>202512</td>
+      <td>2.263287e+07</td>
+      <td>16.934914</td>
+      <td>2.263701e+07</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0.0</td>
+      <td>0.001269</td>
+      <td>...</td>
+      <td>-0.288871</td>
+      <td>0.123757</td>
+      <td>0.650206</td>
+      <td>-0.725719</td>
+      <td>-0.190979</td>
+      <td>3160</td>
+      <td>-0.141462</td>
+      <td>2994</td>
+      <td>-0.210737</td>
+      <td>3193</td>
+    </tr>
+    <tr>
+      <th>5472</th>
+      <td>63.698.833/0001-98</td>
+      <td>TREND ETF IDEX B35 CLASSE DE ÍNDICE - RESPONSABILIDADE LIMITADA</td>
+      <td>202512</td>
+      <td>2.273170e+07</td>
+      <td>16.939271</td>
+      <td>2.273587e+07</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0.0</td>
+      <td>0.002968</td>
+      <td>...</td>
+      <td>-0.288871</td>
+      <td>0.123757</td>
+      <td>0.645916</td>
+      <td>-0.725719</td>
+      <td>-0.190982</td>
+      <td>3161</td>
+      <td>-0.141764</td>
+      <td>2996</td>
+      <td>-0.210654</td>
+      <td>3192</td>
+    </tr>
+    <tr>
+      <th>5473</th>
+      <td>63.756.772/0001-78</td>
+      <td>GALAPAGOS BITCOIN CME CF FUNDO DE ÍNDICE</td>
+      <td>202512</td>
+      <td>4.695182e+06</td>
+      <td>15.362048</td>
+      <td>4.696480e+06</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.000000</td>
+      <td>...</td>
+      <td>-0.363363</td>
+      <td>0.123757</td>
+      <td>0.653413</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>5474</th>
+      <td>63.905.124/0001-36</td>
+      <td>BTG PACTUAL TEVA AUVP ITBR LIQUIDEZ FUNDO DE ÍNDICE</td>
+      <td>202512</td>
+      <td>7.532298e+07</td>
+      <td>18.137296</td>
+      <td>7.533181e+07</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.000000</td>
+      <td>...</td>
+      <td>-0.363363</td>
+      <td>0.123757</td>
+      <td>0.653413</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>0</td>
+      <td>NaN</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>5475</th>
+      <td>64.155.784/0001-00</td>
+      <td>RES JUDICATA FIDC NÃO PADRONIZADOS RESPONSABILIDADE LIMITADA</td>
+      <td>202512</td>
+      <td>2.801524e+06</td>
+      <td>14.845674</td>
+      <td>2.804015e+06</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0.0</td>
+      <td>0.000000</td>
+      <td>...</td>
+      <td>-0.288871</td>
+      <td>0.123757</td>
+      <td>0.653413</td>
+      <td>-0.725719</td>
+      <td>-0.395153</td>
+      <td>4122</td>
+      <td>-0.304576</td>
+      <td>3748</td>
+      <td>-0.455809</td>
+      <td>4206</td>
+    </tr>
   </tbody>
 </table>
-<p>5 rows × 23 columns</p>
+<p>5476 rows × 23 columns</p>
 </div>
 
 

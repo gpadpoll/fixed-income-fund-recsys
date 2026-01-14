@@ -4,6 +4,14 @@ Ranking Brazilian fixed income funds
 
 This CLI tool provides configuration management capabilities with a clean, modern interface built using Typer and Rich.
 
+
+## Get Started
+
+See the Docs page: https://gpadpoll.github.io/fixed-income-fund-recsys/
+
+---
+# Specific Docs below
+
 ## Features
 
 - **Configuration Management**: Set, get, list, and reset configuration values
@@ -40,36 +48,6 @@ If you encounter installation issues, upgrading Poetry usually resolves them.
    ```
 
 ## CLI Commands
-
-### Configuration Management
-
-- **`fif config set KEY VALUE`** - Set a configuration value
-- **`fif config get KEY`** - Get a configuration value  
-- **`fif config list`** - List all configuration values
-- **`fif config reset`** - Reset to default values
-
-### Examples
-
-```bash
-# View current configuration
-fif config list
-
-# Set values directly
-fif config set theme dark
-fif config set debug true
-fif config set timeout 30
-
-# Set values interactively
-fif config set custom_key
-# > Enter value for 'custom_key': my_value
-
-# Get specific values
-fif config get theme
-fif config get debug
-
-# Reset to defaults (with confirmation)
-fif config reset
-```
 
 ### Data, feature and model commands 🔧
 
