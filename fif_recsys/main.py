@@ -6,7 +6,7 @@ It provides configuration management capabilities through the config command.
 """
 import typer
 
-from fif_recsys.commands import config, data, feature, model
+from fif_recsys.commands import config, data, feature, model, policy
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -17,6 +17,7 @@ app.add_typer(config.app, name="config", help="manage configuration settings")
 app.add_typer(data.app, name="data")
 app.add_typer(feature.app, name="feature")
 app.add_typer(model.app, name="model")
+app.add_typer(policy.app, name="policy")
 
 
 def fif():

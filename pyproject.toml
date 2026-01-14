@@ -21,6 +21,9 @@ typer = "^0.17.0"
 rich = "^14.0.0"
 shellingham = "^1.5.0"
 requests = "^2.32.0"
+# Core data dependencies required at runtime
+pandas = "^2.1.0"
+pyyaml = "^6.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "*"

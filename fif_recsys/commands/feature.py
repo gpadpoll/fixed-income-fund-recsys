@@ -270,6 +270,11 @@ def compute_all_features(
     for dataset_name in registry:
 
         dataset_feature_cfg = registry[dataset_name]
+        # Skip datasets that have no feature definitions (empty mapping)
+        if not dataset_feature_cfg:
+            console.print(f"[yellow]Skipping dataset '{dataset_name}': no features defined in registry.[/yellow]")
+            continue
+
         df = datasets[dataset_name]
 
         df_res = compute_features_from_df(

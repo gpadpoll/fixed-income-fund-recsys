@@ -1,0 +1,188 @@
+fetch:
+    cda:
+        base_url: "https://dados.cvm.gov.br/dados/FI/DOC/CDA/DADOS/"
+        periods:
+            # - "202501"
+            # - "202502"
+            # - "202503"
+            # - "202504"
+            # - "202505"
+            # - "202506"
+            # - "202507"
+            # - "202508"
+            # - "202509"
+            # - "202510"
+            # - "202511"
+            - "202512"
+        filename_template: "cda_fi_{period}.zip"
+
+    cotas:
+        base_url: "https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/"
+        periods:
+            # - "2023"
+            # - "2024"
+            - "2025"
+        filename_template: "inf_diario_fi_{period}.zip"
+
+feature:
+    group_keys:
+        - CNPJ_FUNDO_CLASSE
+        - DENOM_SOCIAL
+        - competencia
+    feature_registry:
+        cda:
+            patrimonio_liq:
+                description: "Maximum reported net asset value per fund-month."
+                method: max
+                args:
+                    - VL_PATRIM_LIQ
+                            
+            log_aum:
+                description: "Maximum reported net asset value per fund-month."
+                method: max
+                args:
+                    - VL_PATRIM_LIQ
+                adjustment:
+                    - log
+
+            total_posicao:
+                description: "Sum of final market value of all positions in the period."
+                method: sum
+                args:
+                    - VL_MERC_POS_FINAL
+
+            n_ativos:
+                description: "Number of unique assets in the fund portfolio."
+                method: nunique
+                args:
+                    - CD_ATIVO
+
+            n_emissores:
+                description: "Number of unique issuers in the fund portfolio."
+                method: nunique
+                args:
+                    - CPF_CNPJ_EMISSOR
+
+            credito_share:
+                description: "Weighted share of credit-linked assets in the portfolio."
+                method: credito_share_feature_fn
+                args:
+                    - ["Debêntures", "Cédula de Crédito", "CRI", "CRA", "Notas Promissórias"]
+                adjustment:
+                    - clip
+
+            related_party_share:
+                description: "Weighted share of related-party issuers."
+                method: related_party_share_feature_fn
+                adjustment:
+                    - clip
+
+            issuer_hhi:
+                description: "Herfindahl-Hirschman index based on issuer weights."
+                method: hhi_feature_fn
+                adjustment:
+                    - clip
+                    - coalesce
+        cotas: {}
+            
+score:
+    size_score:
+        type: zscore
+        description: >
+            Measures the relative size of the fund based on its assets under
+            management. Larger funds typically exhibit greater operational
+            stability, better liquidity access, and lower idiosyncratic risk.
+            Computed using the z-score of the log-transformed AUM (log_aum).
+        args:
+            feature: log_aum
+
+    diversification_score:
+        type: zscore
+        description: >
+            Evaluates how diversified the fund's portfolio is in terms of
+            the number of unique assets held. Higher values indicate broader
+            asset diversification, reducing exposure to security-specific risks.
+        args:
+            feature: n_ativos
+
+    issuer_diversification_score:
+        type: zscore
+        description: >
+            Measures diversification across issuers by counting how many distinct
+            counterparties the fund is exposed to. Funds with exposures distributed
+            across more issuers typically have lower concentration and reduced
+            issuer-specific credit risk.
+        args:
+            feature: n_emissores
+
+    credit_risk_score:
+        type: zscore
+        description: >
+            Quantifies the fund's exposure to credit-linked instruments such as
+            debentures, CRIs/CRAs, and promissory notes. A higher credit share
+            typically increases sensitivity to credit events. The score is inverted
+            so that higher credit exposure corresponds to a lower (worse) score.
+        args:
+            feature: credito_share
+        adjustment:
+            - invert
+
+    governance_risk_score:
+        type: zscore
+        description: >
+            Captures exposure to related-party transactions, which may increase
+            governance risk due to potential conflicts of interest and reduced
+            market discipline. The score is inverted, so funds with higher
+            related-party share receive a lower (worse) score.
+        args:
+            feature: related_party_share
+        adjustment:
+            - invert
+
+    concentration_risk_score:
+        type: zscore
+        description: >
+            Measures portfolio concentration using the Herfindahl-Hirschman Index
+            (HHI) computed over issuer exposure weights. Higher HHI values indicate
+            more concentrated portfolios and elevated idiosyncratic and liquidity
+            risks. Score is inverted so higher concentration yields a lower score.
+        args:
+            feature: issuer_hhi
+        adjustment:
+            - invert
+profile:
+  conservative:
+    description: >
+      Designed for risk-averse investors prioritizing capital preservation and stability.
+      Emphasizes fund size, diversification, and issuer spread to minimize volatility,
+      while keeping exposure to credit and governance risks tightly controlled.
+    size_score: 0.25
+    diversification_score: 0.20
+    issuer_diversification_score: 0.20
+    credit_risk_score: 0.15
+    governance_risk_score: 0.10
+    concentration_risk_score: 0.10
+
+  balanced:
+    description: >
+      Suitable for investors seeking a middle ground between safety and return.
+      Balances diversification and issuer exposure with moderate tolerance for credit
+      and concentration risks, aiming for a stable but growth-oriented allocation.
+    size_score: 0.20
+    diversification_score: 0.15
+    issuer_diversification_score: 0.15
+    credit_risk_score: 0.20
+    governance_risk_score: 0.15
+    concentration_risk_score: 0.15
+
+  institutional:
+    description: >
+      Targeted at large professional allocators who value scale and diversification
+      but can tolerate more concentrated or complex positions. Prioritizes fund size
+      and issuer spread while placing relatively lower weight on credit and governance constraints.
+    size_score: 0.30
+    diversification_score: 0.20
+    issuer_diversification_score: 0.20
+    credit_risk_score: 0.10
+    governance_risk_score: 0.10
+    concentration_risk_score: 0.10

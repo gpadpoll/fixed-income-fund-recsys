@@ -6,7 +6,7 @@ Commands:
   and write the output feature table with scores appended.
 
 Programmatic helpers:
-- `compute_scores_from_df(df, score_registry, group_by='competencia')`
+- `compute_scores_from_df(df, score_registry, group_by='reference_date')`
 - `compute_scores_from_yaml(df, yaml_cfg)`
 """
 from pathlib import Path
@@ -25,7 +25,7 @@ def _zscore(s: pd.Series) -> pd.Series:
     return (s - s.mean()) / (s.std() + 1e-6)
 
 
-def compute_scores_from_df(df: pd.DataFrame, score_registry: Dict[str, Any], group_by: str = "competencia") -> pd.DataFrame:
+def compute_scores_from_df(df: pd.DataFrame, score_registry: Dict[str, Any], group_by: str = "reference_date") -> pd.DataFrame:
     """Compute scores defined in score_registry and append to input DataFrame copy.
 
     Parameters
@@ -35,7 +35,7 @@ def compute_scores_from_df(df: pd.DataFrame, score_registry: Dict[str, Any], gro
     score_registry: dict
         Mapping of score_name -> config (type, args, adjustment)
     group_by: str
-        Column name to use for cross-sectional normalization (default: 'competencia').
+        Column name to use for cross-sectional normalization (default: 'reference_date').
 
     Returns
     -------
@@ -72,7 +72,7 @@ def compute_scores_from_df(df: pd.DataFrame, score_registry: Dict[str, Any], gro
     return out
 
 
-def compute_scores_from_yaml(df: pd.DataFrame, yaml_cfg: Dict[str, Any], group_by: str = "competencia") -> pd.DataFrame:
+def compute_scores_from_yaml(df: pd.DataFrame, yaml_cfg: Dict[str, Any], group_by: str = "reference_date") -> pd.DataFrame:
     """Apply score definitions from YAML (top-level `score` section) to DataFrame."""
     score_registry = yaml_cfg.get("score") or {}
     return compute_scores_from_df(df, score_registry, group_by=group_by)
