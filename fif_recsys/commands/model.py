@@ -81,7 +81,7 @@ def compute_scores_from_yaml(df: pd.DataFrame, yaml_cfg: Dict[str, Any], group_b
 @app.command()
 def score(
     input_path: Path = typer.Option(Path("data/features.parquet"), "--input", "-i", help="Feature table input path (parquet or csv)."),
-    config_path: Path = typer.Option(Path("feature.yaml"), "--config", "-c", help="YAML file with `score` section."),
+    config_path: Path = typer.Option(Path("manifest.yaml"), "--config", "-c", help="YAML file with `score` section."),
     output_path: Path = typer.Option(Path("data/features_scored.parquet"), "--output", "-o", help="Output path for scored feature table."),
 ):
     """Load feature table, compute scores from YAML config, and write the output table."""

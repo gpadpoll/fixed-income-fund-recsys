@@ -132,5 +132,5 @@ def fetch(
         manifest = yaml.safe_load(f)
 
     # pass a reference_date (today) to the programmatic helper
-    fetch_manifest(manifest, output_dir, reference_date=date.today().isoformat())
+    fetch_manifest(manifest['fetch'], output_dir, reference_date=date.today().isoformat())
 

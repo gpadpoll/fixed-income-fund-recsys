@@ -102,7 +102,7 @@ def compute_profile_scores_from_yaml(df: pd.DataFrame, yaml_cfg: Dict[str, Any])
 def profile_score(
    input_path: Path = typer.Option(Path("data/features_scored.parquet"),
                                    "--input", "-i", help="Feature table with score components."),
-   config_path: Path = typer.Option(Path("profiles.yaml"),
+   config_path: Path = typer.Option(Path("manifest.yaml"),
                                     "--config", "-c", help="YAML file defining customer profile weights."),
    output_path: Path = typer.Option(Path("data/features_profile_scored.parquet"),
                                     "--output", "-o", help="Output file with profile scores and rankings."),

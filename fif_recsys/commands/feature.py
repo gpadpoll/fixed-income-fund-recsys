@@ -364,7 +364,7 @@ def compute_features_from_yaml(input_dir: Path, yaml_cfg: Dict[str, Any]) -> pd.
 @app.command()
 def build(
     input_dir: Path = typer.Option(Path("data"), "--input-dir", "-i", help="Directory containing datasets"),
-    config_path: Path = typer.Option(Path("feature.yaml"), "--config", "-c", help="YAML feature configuration"),
+    config_path: Path = typer.Option(Path("manifest.yaml"), "--config", "-c", help="YAML feature configuration"),
     output_path: Path = typer.Option(Path("data/features.parquet"), "--output", "-o", help="Output path to feature store"),
 ):
     """
